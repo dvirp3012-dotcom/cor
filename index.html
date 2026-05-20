@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="he">
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1" />
+	<title>משחק מכונית תלת־ממדי — הימנע מהצופה והגיעו ליעד תוך 10 שניות</title>
+	<style>
+		html,body{height:100%;margin:0;font-family:Arial, Helvetica, sans-serif;background:linear-gradient(#87CEEB,#bfe9ff 60%);}
+		#game{width:100%;height:100%;display:block;overflow:hidden;}
+		.hud{position:fixed;left:16px;top:16px;color:#fff;text-shadow:0 2px 6px rgba(0,0,0,0.6);}
+		.timer{font-size:28px;font-weight:700;padding:8px 12px;background:rgba(0,0,0,0.3);border-radius:8px}
+		.message{position:fixed;right:16px;top:16px;color:#fff;font-size:20px;padding:10px 14px;background:rgba(0,0,0,0.35);border-radius:8px}
+		.instructions{position:fixed;left:16px;bottom:16px;color:#fff;background:rgba(0,0,0,0.25);padding:8px 12px;border-radius:8px}
+		.start-button{position:fixed;right:16px;bottom:16px;color:#111;font-size:18px;padding:12px 18px;background:rgba(255,255,255,0.95);border:none;border-radius:12px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.18);transition:transform .15s ease,background .15s ease;}
+		.start-button:hover{transform:translateY(-2px);background:rgba(255,255,255,1);}
+		canvas{display:block}
+	</style>
+</head>
+<body>
+	<div id="game"></div>
+	<div class="hud"><div class="timer" id="timer">60.00</div></div>
+	<div class="level" id="level">רמה: 1</div>
+	<div class="message" id="msg">התחל—יש לך דקה כדי לעבור את הרמה הראשונה!</div>
+	<div class="instructions">שלט: W קדימה • A / D שמאלה/ימינה • נגיעה: צדי המסך</div>
+	<button class="start-button" id="startButton">התחל משחק</button>
+
+	<script src="https://unpkg.com/three@0.153.0/build/three.min.js"></script>
+	<script>
+	// הגדרות בסיסיות
+	const container = document.getElementById('game');
+	const scene = new THREE.Scene();
+	scene.background = new THREE.Color(0x87ceeb);
+	scene.fog = new THREE.FogExp2(0xbfe9ff, 0.0025);
+
+	const camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 1000);
+	camera.position.set(0,6,16);
+	camera.lookAt(new THREE.Vector3(0,1,20));
+
+	const renderer = new THREE.WebGLRenderer({antialias:true});
+	renderer.setSize(innerWidth, innerHeight);
+	renderer.setPixelRatio(window.devicePixelRatio);
+	renderer.shadowMap.enabled = true;
+	renderer.setClearColor(0x87ceeb);
+	container.appendChild(renderer.domElement);
+
+	// תאורה
+	const ambient = new THREE.HemisphereLight(0xffffff, 0x444466, 0.7);
+	scene.add(ambient);
+	const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+	sun.position.set(5,20,10);
+	sun.castShadow = true;
+	sun.shadow.camera.left = -30; sun.shadow.camera.right = 30; sun.shadow.camera.top = 30; sun.shadow.camera.bottom = -30;
+	sun.shadow.mapSize.set(2048,2048);
+	scene.add(sun);
+
+	// קרקע
+	const groundGeo = new THREE.PlaneGeometry(200,200);
+	const groundMat = new THREE.MeshLambertMaterial({color:0x5fb85f});
+	const ground = new THREE.Mesh(groundGeo, groundMat);
+	ground.rotation.x = -Math.PI/2;
+	ground.receiveShadow = true;
+	scene.add(ground);
+
+	// כביש דינמי לפי רמה
+	let level = 1;
+	const baseTime = 60;
+	let timeLimit = baseTime;
+	let roadLength = 160;
+	let finishZ = -roadLength/2 + 6;
+	const roadWidth = 8;
+	let speed = 18;
+	const baseSpeed = 16;
+	let road;
+	let finish;
+	let sideLeft, sideRight;
+	const roadLines = [];
+	let obstacles = [];
+	const obstacleMat = new THREE.MeshStandardMaterial({color:0x662200, metalness:0.1, roughness:0.8});
+	const lineGeo = new THREE.BoxGeometry(0.2,0.01,6);
+	const lineMat = new THREE.MeshStandardMaterial({color:0xffffcc, emissive:0xffffcc, emissiveIntensity:0.08});
+	const finishMat = new THREE.MeshBasicMaterial({color:0xffffff});
+
+	function disposeMesh(mesh){
+		if(!mesh) return;
+		if(mesh.geometry) mesh.geometry.dispose();
+		if(mesh.material) mesh.material.dispose();
+	}
+
+	function buildLevel(){
+		roadLength = 160 + (level - 1) * 10;
+		timeLimit = Math.max(10, baseTime - Math.floor((level - 1)/10));
+		speed = baseSpeed + level * 0.25;
+		levelEl.textContent = 'רמה: ' + level;
+		timerEl.textContent = timeLimit.toFixed(2);
+
+		if(road){ scene.remove(road); disposeMesh(road); }
+		if(finish){ scene.remove(finish); disposeMesh(finish); }
+		if(sideLeft){ scene.remove(sideLeft); disposeMesh(sideLeft); }
+		if(sideRight){ scene.remove(sideRight); disposeMesh(sideRight); }
+		roadLines.forEach(line=>{ scene.remove(line); disposeMesh(line); });
+		roadLines.length = 0;
+		obstacles.forEach(obs=>{ scene.remove(obs); disposeMesh(obs); });
+		obstacles.length = 0;
+
+		const roadGeo = new THREE.BoxGeometry(roadWidth, 0.2, roadLength);
+		const roadMat = new THREE.MeshStandardMaterial({color:0x333333, metalness:0.2, roughness:0.7});
+		road = new THREE.Mesh(roadGeo, roadMat);
+		road.position.y = 0.1;
+		road.receiveShadow = true;
+		scene.add(road);
+
+		const numLines = Math.ceil(roadLength / 8);
+		for(let i=0;i<numLines;i++){
+			const v = new THREE.Mesh(lineGeo, lineMat);
+			v.position.set(0,0.12, roadLength/2 - 6 - i*8);
+			scene.add(v);
+			roadLines.push(v);
+		}
+
+		const finishZ = -roadLength/2 + 6;
+		finishZ = -roadLength/2 + 6;
+		const finishGeo = new THREE.PlaneGeometry(roadWidth,1.2);
+		finish = new THREE.Mesh(finishGeo, finishMat);
+		finish.rotation.x = -Math.PI/2;
+		finish.position.set(0,0.21, finishZ);
+		scene.add(finish);
+
+		sideLeft = new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,roadLength), lineMat);
+		sideLeft.position.set(-roadWidth/2 - 0.1, 0.1, 0);
+		sideLeft.receiveShadow = true;
+		scene.add(sideLeft);
+		sideRight = sideLeft.clone();
+		sideRight.position.x = roadWidth/2 + 0.1;
+		scene.add(sideRight);
+
+		const obstacleCount = Math.min(10 + Math.floor(level / 2), 20);
+		for(let i=0;i<obstacleCount;i++){
+			const box = new THREE.Mesh(new THREE.BoxGeometry(1.3,1.2,1.3), obstacleMat);
+			const lane = (Math.random() < 0.5 ? -1.8 : 1.8) + (Math.random() - 0.5) * 0.5;
+			box.position.set(lane, 0.6, roadLength/2 - 15 - i * 14 + (Math.random() * 8 - 4));
+			box.castShadow = true;
+			box.receiveShadow = true;
+			scene.add(box);
+			obstacles.push(box);
+		}
+	}
+
+	// מכונית פשוטה
+	const car = new THREE.Group();
+	const body = new THREE.Mesh(new THREE.BoxGeometry(1.6,0.6,3), new THREE.MeshStandardMaterial({color:0xff3333, metalness:0.6, roughness:0.4}));
+	body.position.y = 0.6; body.castShadow = true; car.add(body);
+	const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.2,0.45,1.2), new THREE.MeshStandardMaterial({color:0x222244,metalness:0.3,roughness:0.2}));
+	cabin.position.set(0,0.9,-0.1); cabin.castShadow = true; car.add(cabin);
+	// גלגלים
+	const wheelGeo = new THREE.CylinderGeometry(0.28,0.28,0.5,16);
+	const wheelMat = new THREE.MeshStandardMaterial({color:0x111111, metalness:0.6});
+	const wheelPositions = [[-0.8,0.25,1],[0.8,0.25,1],[-0.8,0.25,-1],[0.8,0.25,-1]];
+	wheelPositions.forEach(p=>{const w = new THREE.Mesh(wheelGeo,wheelMat); w.rotation.z = Math.PI/2; w.position.set(p[0],p[1],p[2]); w.castShadow=true; car.add(w);});
+
+	car.position.set(0,0, roadLength/2 - 8);
+	scene.add(car);
+
+	// הגדרות משחק
+	let startTime = null;
+	let started = false;
+	let running = false;
+	let finished = false;
+	let crashed = false;
+	let levelComplete = false;
+	const totalTime = 10; // לא בשימוש ישירות, משתמשים ב-timeLimit
+	const maxSteer = 6; // רוחב דרכים מקסימלי
+	const roadHalf = roadWidth/2 - 0.8;
+
+	// HUD
+	const timerEl = document.getElementById('timer');
+	const msgEl = document.getElementById('msg');
+	const levelEl = document.getElementById('level');
+	const startButton = document.getElementById('startButton');
+
+	// קלט — שינוי: לחיצה בודדת להזיזה שמאלה/ימינה
+	const moveStep = 1.6; // מרחק בצעד אחד
+	let tiltTarget = 0;
+	let forwardPressed = false;
+	window.addEventListener('keydown', e=>{
+		if(e.key==='w' || e.key==='W' || e.key==='ArrowUp'){
+			forwardPressed = true;
+		}
+		if(e.repeat) return;
+		if(e.key==='ArrowLeft' || e.key==='a' || e.key==='A'){ moveCar(-1); }
+		if(e.key==='ArrowRight' || e.key==='d' || e.key==='D'){ moveCar(1); }
+	});
+	window.addEventListener('keyup', e=>{
+		if(e.key==='w' || e.key==='W' || e.key==='ArrowUp'){
+			forwardPressed = false;
+		}
+	});
+	// מגע פשוט - הקשת צד המסך תזיז צעד יחיד
+	window.addEventListener('touchstart', e=>{ e.preventDefault(); const t = e.touches[0]; if(t.clientX < innerWidth/2) moveCar(-1); else moveCar(1); }, {passive:false});
+
+	function moveCar(dir){
+		if(!started || finished || crashed) return;
+		car.position.x += dir * moveStep;
+		car.position.x = Math.max(-maxSteer, Math.min(maxSteer, car.position.x));
+		tiltTarget = -dir * 0.35; // הטיה קצרה למראה
+	}
+
+	// לולאת אנימציה
+	let last = performance.now();
+	function animate(now){
+		const dt = (now - last)/1000; last = now;
+		if(started && running && !finished && !crashed){
+			if(startTime===null) startTime = now;
+			// מתקדמים רק כש- W לחוץ
+			if(forwardPressed){
+				const forward = speed * dt;
+				car.position.z -= forward;
+			}
+			// סטייר: הטיה חלקה
+			car.rotation.z += (tiltTarget - car.rotation.z) * 0.12;
+			// החזיר את הטיה בהדרגה
+			tiltTarget += (0 - tiltTarget) * 0.06;
+			// מצלמה עוקבת
+			camera.position.x += (car.position.x - camera.position.x) * 0.11;
+			camera.position.z += (car.position.z + 12 - camera.position.z) * 0.06;
+			camera.lookAt(new THREE.Vector3(car.position.x, car.position.y + 1, car.position.z - 4));
+
+			// בדיקות התנגשות עם מכשולים
+			for(const obstacle of obstacles){
+				const dx = car.position.x - obstacle.position.x;
+				const dz = car.position.z - obstacle.position.z;
+				if(Math.abs(dx) < 1.2 && Math.abs(dz) < 1.2){
+					crashed = true;
+					running = false;
+					msgEl.textContent = 'התנגשת במכשול! נו, הפסדת 😵';
+					msgEl.style.background='rgba(120,0,0,0.45)';
+					startButton.textContent = 'התחל מחדש';
+					startButton.style.display = 'block';
+					break;
+				}
+			}
+			if(car.position.z < finishZ){
+				finished = true;
+				running = false;
+				levelComplete = true;
+				msgEl.textContent = 'רמה ' + level + ' עברה! לחץ להמשך לרמה ' + (level + 1);
+				msgEl.style.background='rgba(0,120,0,0.45)';
+				startButton.textContent = 'המשך לרמה ' + (level + 1);
+				startButton.style.display = 'block';
+			}
+			if(Math.abs(car.position.x) > roadHalf){ crashed = true; running = false; msgEl.textContent = 'התנגש! ירדת מהכביש 😵'; msgEl.style.background='rgba(120,0,0,0.45)'; startButton.textContent = 'התחל מחדש'; startButton.style.display = 'block'; }
+			// בדיקת זמן
+			const elapsed = (now - startTime)/1000;
+			const left = Math.max(0, timeLimit - elapsed);
+			timerEl.textContent = left.toFixed(2);
+			if(left <= 0 && !finished){ crashed = true; running = false; msgEl.textContent = 'הזמן נגמר — הפסדת ⏱️'; msgEl.style.background='rgba(120,0,0,0.45)'; startButton.textContent = 'התחל מחדש'; startButton.style.display = 'block'; }
+		}
+
+		// אפקט מהירות — מעט טשטוש וגמישות
+		renderer.render(scene, camera);
+		requestAnimationFrame(animate);
+	}
+	requestAnimationFrame(animate);
+
+	// התאמה לשינויים בגודל חלון
+	window.addEventListener('resize', ()=>{ camera.aspect = innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); });
+
+	function resetGame(){
+		started = false;
+		running = false;
+		finished = false;
+		crashed = false;
+		startTime = null;
+		forwardPressed = false;
+		car.position.set(0,0, roadLength/2 - 8);
+		car.rotation.set(0,0,0);
+		camera.position.set(0,5,12);
+		camera.lookAt(new THREE.Vector3(0,1,roadLength/2 - 12));
+		timerEl.textContent = timeLimit.toFixed(2);
+		msgEl.textContent = 'לחץ על התחל כדי להתחיל את המשחק';
+		msgEl.style.background='rgba(0,0,0,0.35)';
+		startButton.style.display = 'block';
+	}
+
+	startButton.addEventListener('click', ()=>{
+		if(levelComplete){
+			level += 1;
+			levelComplete = false;
+			buildLevel();
+			running = true;
+			startButton.style.display = 'none';
+			msgEl.textContent = 'רמה ' + level + ' התחילה! הולך להיות קשה יותר.';
+			msgEl.style.background='rgba(0,0,0,0.35)';
+			return;
+		}
+		if(crashed){
+			crashed = false;
+			finished = false;
+			startTime = null;
+			buildLevel();
+			running = true;
+			startButton.style.display = 'none';
+			msgEl.textContent = 'המשחק התחיל מחדש! נווט טוב יותר הפעם.';
+			msgEl.style.background='rgba(0,0,0,0.35)';
+			return;
+		}
+		if(started) return;
+		started = true;
+		running = true;
+		startTime = null;
+		buildLevel();
+		startButton.style.display = 'none';
+		msgEl.textContent = 'המשחק התחיל! נווט ונסה להגיע בזמן.';
+		msgEl.style.background='rgba(0,0,0,0.35)';
+	});
+
+	resetGame();
+
+	// כפתור לטעינה מחדש וניפוי באגים
+	window.addEventListener('dblclick', ()=>{ location.reload(); });
+
+	// התחלת הודעה קצרה
+	setTimeout(()=>{ msgEl.textContent = 'לחץ על התחלה כדי להתחיל את המשחק'; msgEl.style.background='rgba(0,0,0,0.35)'; }, 1200);
+	</script>
+</body>
+</html>
+
