@@ -11,8 +11,31 @@
 		.timer{font-size:28px;font-weight:700;padding:8px 12px;background:rgba(0,0,0,0.3);border-radius:8px}
 		.message{position:fixed;right:16px;top:16px;color:#fff;font-size:20px;padding:10px 14px;background:rgba(0,0,0,0.35);border-radius:8px}
 		.instructions{position:fixed;left:16px;bottom:16px;color:#fff;background:rgba(0,0,0,0.25);padding:8px 12px;border-radius:8px}
-		.start-button{position:fixed;right:16px;bottom:16px;color:#111;font-size:18px;padding:12px 18px;background:rgba(255,255,255,0.95);border:none;border-radius:12px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.18);transition:transform .15s ease,background .15s ease;}
+		.start-button{position:relative;display:inline-flex;justify-content:center;align-items:center;color:#111;font-size:18px;padding:12px 18px;background:rgba(255,255,255,0.95);border:none;border-radius:12px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.18);transition:transform .15s ease,background .15s ease;}
 		.start-button:hover{transform:translateY(-2px);background:rgba(255,255,255,1);}
+		.restart-button{position:fixed;right:16px;bottom:16px;color:#fff;font-size:18px;padding:12px 18px;background:rgba(220,50,50,0.9);border:none;border-radius:12px;cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,0.25);transition:transform .15s ease,background .15s ease;display:none;z-index:5;}
+		.restart-button:hover{transform:translateY(-2px);background:rgba(220,50,50,1);}
+		.restart-button.show{display:block}
+		.overlay{position:fixed;inset:0;background:rgba(5,12,35,0.92);display:flex;align-items:center;justify-content:center;z-index:10;padding:20px}
+		.menu{max-width:480px;width:100%;background:rgba(255,255,255,0.96);border-radius:18px;box-shadow:0 18px 40px rgba(0,0,0,0.25);color:#111;padding:24px;direction:rtl;text-align:right}
+		.menu h1{margin:0 0 14px;font-size:30px}
+		.menu p{margin:0 0 16px;line-height:1.55}
+		.level-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0 16px}
+		.level-item{padding:10px 12px;border:1px solid #aaa;border-radius:12px;cursor:pointer;background:#f9f9ff;color:#222;transition:transform .15s ease,border-color .15s ease,background .15s ease;text-align:center}
+		.level-item:hover{transform:translateY(-1px);border-color:#444}
+		.level-item.selected{background:#3d5bfd;color:#fff;border-color:#2a3dbf}
+		.menu-row{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;margin:14px 0;font-size:16px}
+		.menu-row span{display:block}
+		.folder-button{display:inline-flex;align-items:center;gap:8px;padding:10px 14px;border:1px solid #aaa;border-radius:12px;background:#eef0ff;color:#111;cursor:pointer;transition:transform .15s ease,background .15s ease;}
+		.folder-button:hover{background:#dde1ff;transform:translateY(-1px)}
+		.folder-content{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:12px 0 16px}
+		.setting-row{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+		.setting-row label{font-size:14px;color:#444}
+		.setting-row input[type=range]{width:100%}
+		.setting-row input[type=checkbox]{transform:scale(1.2);margin-left:6px}
+		.leaderboard{margin-top:18px}
+		.leaderboard h2{margin:0 0 10px;font-size:18px}
+		.leaderboard-item{padding:10px 12px;border-radius:12px;border:1px solid #ddd;background:#fff;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;font-size:14px}
 		canvas{display:block}
 	</style>
 </head>
@@ -21,8 +44,27 @@
 	<div class="hud"><div class="timer" id="timer">60.00</div></div>
 	<div class="level" id="level">רמה: 1</div>
 	<div class="message" id="msg">התחל—יש לך דקה כדי לעבור את הרמה הראשונה!</div>
-	<div class="instructions">שלט: W קדימה • A / D שמאלה/ימינה • נגיעה: צדי המסך</div>
-	<button class="start-button" id="startButton">התחל משחק</button>
+	<div class="instructions">שלט: W קדימה • A / D שמאלה/ימינה • רווח לעצירה/המשך • נגיעה: צדי המסך</div>
+	<button class="restart-button" id="restartButton">התחל מחדש</button>
+	<div class="overlay" id="menuOverlay">
+		<div class="menu">
+			<h1>תפריט ראשי</h1>
+			<p id="menuInfo">בחר רמה מתוך התיקייה כדי להתחיל.</p>
+			<button class="folder-button" id="levelFolderToggle">⯆ רמות</button>
+			<div class="folder-content" id="levelFolder"></div>
+			<div class="menu-row"><span>רמה נבחרת: <strong id="selectedLevelText">1</strong></span><span>שיא לרמה זו: <strong id="bestTimeText">---</strong></span></div>
+			<div class="setting-row">
+				<label for="timeRange">זמן לסיום המסלול: <span id="timeValue">60 שניות</span></label>
+				<input type="range" min="15" max="120" step="5" id="timeRange" />
+			</div>
+			<div class="setting-row"><label><input type="checkbox" id="obstacleToggle" checked /> יש מכשולים באמצע</label></div>
+			<div class="leaderboard">
+				<h2>לוח שיאים - 10 הטובים ביותר</h2>
+				<div id="leaderboardList"></div>
+			</div>
+			<button class="start-button" id="startButton">התחל</button>
+		</div>
+	</div>
 
 	<script src="https://unpkg.com/three@0.153.0/build/three.min.js"></script>
 	<script>
@@ -53,9 +95,9 @@
 	sun.shadow.mapSize.set(2048,2048);
 	scene.add(sun);
 
-	// קרקע
+	// קרקע דשא ירוק
 	const groundGeo = new THREE.PlaneGeometry(200,200);
-	const groundMat = new THREE.MeshLambertMaterial({color:0x5fb85f});
+	const groundMat = new THREE.MeshLambertMaterial({color:0x4db84d});
 	const ground = new THREE.Mesh(groundGeo, groundMat);
 	ground.rotation.x = -Math.PI/2;
 	ground.receiveShadow = true;
@@ -64,10 +106,12 @@
 	// כביש דינמי לפי רמה
 	let level = 1;
 	const baseTime = 60;
+	let customBaseTime = baseTime;
 	let timeLimit = baseTime;
 	let roadLength = 160;
 	let finishZ = -roadLength/2 + 6;
 	const roadWidth = 8;
+	let obstaclesEnabled = true;
 	let speed = 18;
 	const baseSpeed = 16;
 	let road;
@@ -88,7 +132,7 @@
 
 	function buildLevel(){
 		roadLength = 160 + (level - 1) * 10;
-		timeLimit = Math.max(10, baseTime - Math.floor((level - 1)/10));
+		timeLimit = Math.max(10, customBaseTime - Math.floor((level - 1)/10));
 		speed = baseSpeed + level * 0.25;
 		levelEl.textContent = 'רמה: ' + level;
 		timerEl.textContent = timeLimit.toFixed(2);
@@ -117,7 +161,6 @@
 			roadLines.push(v);
 		}
 
-		const finishZ = -roadLength/2 + 6;
 		finishZ = -roadLength/2 + 6;
 		const finishGeo = new THREE.PlaneGeometry(roadWidth,1.2);
 		finish = new THREE.Mesh(finishGeo, finishMat);
@@ -133,11 +176,36 @@
 		sideRight.position.x = roadWidth/2 + 0.1;
 		scene.add(sideRight);
 
-		const obstacleCount = Math.min(10 + Math.floor(level / 2), 20);
+		const obstacleCount = obstaclesEnabled ? Math.min(18 + Math.floor(level * 1.4), 40) : 0;
+		const startZ = roadLength/2 - 15;
+		const endZ = finishZ + 3;
 		for(let i=0;i<obstacleCount;i++){
+			const zPos = startZ - i * 10 + (Math.random() * 6 - 3);
+			if(zPos < endZ) break;
+			const pattern = i % 5;
+			if(pattern === 4){
+				const leftBox = new THREE.Mesh(new THREE.BoxGeometry(1.3,1.2,1.3), obstacleMat);
+				const rightBox = leftBox.clone();
+				leftBox.position.set(-1.8, 0.6, zPos);
+				rightBox.position.set(1.8, 0.6, zPos);
+				leftBox.castShadow = rightBox.castShadow = true;
+				leftBox.receiveShadow = rightBox.receiveShadow = true;
+				scene.add(leftBox); scene.add(rightBox);
+				obstacles.push(leftBox, rightBox);
+				continue;
+			}
 			const box = new THREE.Mesh(new THREE.BoxGeometry(1.3,1.2,1.3), obstacleMat);
-			const lane = (Math.random() < 0.5 ? -1.8 : 1.8) + (Math.random() - 0.5) * 0.5;
-			box.position.set(lane, 0.6, roadLength/2 - 15 - i * 14 + (Math.random() * 8 - 4));
+			let xPos;
+			if(pattern === 0){
+				xPos = -roadWidth/2 + 1.1 + Math.random() * 0.3;
+			}else if(pattern === 1){
+				xPos = roadWidth/2 - 1.1 - Math.random() * 0.3;
+			}else if(pattern === 2){
+				xPos = (Math.random() - 0.5) * 1.0;
+			}else{
+				xPos = (Math.random() < 0.5 ? -1.2 : 1.2) + (Math.random() - 0.5) * 0.4;
+			}
+			box.position.set(xPos, 0.6, zPos);
 			box.castShadow = true;
 			box.receiveShadow = true;
 			scene.add(box);
@@ -176,14 +244,58 @@
 	const msgEl = document.getElementById('msg');
 	const levelEl = document.getElementById('level');
 	const startButton = document.getElementById('startButton');
+	const restartButton = document.getElementById('restartButton');
+	const menuOverlay = document.getElementById('menuOverlay');
+	const levelFolderToggle = document.getElementById('levelFolderToggle');
+	const levelFolder = document.getElementById('levelFolder');
+	const selectedLevelText = document.getElementById('selectedLevelText');
+	const bestTimeText = document.getElementById('bestTimeText');
+	const menuInfo = document.getElementById('menuInfo');
+	const timeRange = document.getElementById('timeRange');
+	const timeValue = document.getElementById('timeValue');
+	const obstacleToggle = document.getElementById('obstacleToggle');
+	const leaderboardList = document.getElementById('leaderboardList');
+
+	let selectedLevel = 1;
+	const maxLevels = 12;
+	let paused = false;
+	let pauseStart = null;
+	let showFolder = true;
+	const bestTimes = JSON.parse(localStorage.getItem('bestTimes') || '{}');
+	const leaderboard = JSON.parse(localStorage.getItem('leaderboard') || '[]');
+
+	function getBestTime(levelNum){ return bestTimes[levelNum] || null; }
+	function saveBestTime(levelNum, time){ bestTimes[levelNum] = time; localStorage.setItem('bestTimes', JSON.stringify(bestTimes)); }
+	function updateMenuInfo(){ selectedLevelText.textContent = selectedLevel; const best = getBestTime(selectedLevel); bestTimeText.textContent = best ? best.toFixed(2) + ' שניות' : '---'; menuInfo.textContent = 'בחר רמה מתוך התיקייה והתחל.'; }
+	function renderLevelButtons(){ levelFolder.innerHTML = ''; for(let i=1;i<=maxLevels;i++){ const item = document.createElement('div'); item.className = 'level-item' + (i===selectedLevel ? ' selected' : ''); item.textContent = 'רמה ' + i; item.addEventListener('click', ()=>{ selectedLevel = i; updateLevelSelection(); }); levelFolder.appendChild(item); } }
+	function updateLevelSelection(){ selectedLevelText.textContent = selectedLevel; renderLevelButtons(); updateMenuInfo(); }
+	function openMenu(message){ menuOverlay.style.display = 'flex'; if(message) msgEl.textContent = message; msgEl.style.background='rgba(0,0,0,0.35)'; }
+	function closeMenu(){ menuOverlay.style.display = 'none'; }
+	function toggleFolder(){ showFolder = !showFolder; levelFolder.style.display = showFolder ? 'grid' : 'none'; levelFolderToggle.textContent = (showFolder ? '⯆' : '⯈') + ' רמות'; }
+	function loadSettings(){ const stored = JSON.parse(localStorage.getItem('gameSettings') || '{}'); customBaseTime = stored.customBaseTime || baseTime; obstaclesEnabled = stored.obstaclesEnabled !== false; updateSettingsUI(); }
+	function saveSettings(){ localStorage.setItem('gameSettings', JSON.stringify({customBaseTime, obstaclesEnabled})); }
+	function updateSettingsUI(){ timeValue.textContent = customBaseTime + ' שניות'; timeRange.value = customBaseTime; obstacleToggle.checked = obstaclesEnabled; }
+	function getLeaderboard(){ return leaderboard.slice().sort((a,b)=>a.time-b.time).slice(0,10); }
+	function saveLeaderboard(){ localStorage.setItem('leaderboard', JSON.stringify(leaderboard)); }
+	function renderLeaderboard(){ leaderboardList.innerHTML = ''; const top = getLeaderboard(); if(top.length===0){ leaderboardList.textContent = 'עדיין אין שיאים.'; return; } top.forEach((item,index)=>{ const row = document.createElement('div'); row.className = 'leaderboard-item'; row.innerHTML = '<span>' + (index+1) + '. רמה ' + item.level + '</span><span>' + item.time.toFixed(2) + ' שניות</span>'; leaderboardList.appendChild(row); }); }
+	function addLeaderboardEntry(levelNum, time){ leaderboard.push({level:levelNum,time,date:Date.now()}); saveLeaderboard(); renderLeaderboard(); }
+	function initMenu(){ renderLevelButtons(); updateLevelSelection(); }
+	function resetCarAndCamera(){ car.position.set(0,0, roadLength/2 - 8); car.rotation.set(0,0,0); camera.position.set(0,5,12); camera.lookAt(new THREE.Vector3(0,1,roadLength/2 - 12)); forwardPressed=false; paused=false; pauseStart=null; targetX = 0; }
+	function restartToSelectedLevel(){ level = selectedLevel; started = true; finished = false; crashed = false; levelComplete = false; paused = false; running = true; startTime = null; buildLevel(); resetCarAndCamera(); closeMenu(); restartButton.classList.remove('show'); msgEl.textContent = 'התחלת רמה ' + level + '. השתמש ב-W כדי לנסוע, ברווח כדי לעצור.'; msgEl.style.background='rgba(0,0,0,0.35)'; }
+	function togglePause(){ if(!started || finished || crashed) return; if(paused){ paused = false; running = true; if(pauseStart) startTime += performance.now() - pauseStart; msgEl.textContent = 'המשחק נמשך! רווח לעצירה.'; msgEl.style.background='rgba(0,0,0,0.35)'; } else { paused = true; running = false; pauseStart = performance.now(); msgEl.textContent = 'המשחק בהפסקה. לחץ רווח כדי להמשיך.'; msgEl.style.background='rgba(0,0,0,0.35)'; } }
 
 	// קלט — שינוי: לחיצה בודדת להזיזה שמאלה/ימינה
 	const moveStep = 1.6; // מרחק בצעד אחד
 	let tiltTarget = 0;
 	let forwardPressed = false;
+	let targetX = 0;
 	window.addEventListener('keydown', e=>{
 		if(e.key==='w' || e.key==='W' || e.key==='ArrowUp'){
 			forwardPressed = true;
+		}
+		if(e.key===' ' || e.code==='Space'){
+			e.preventDefault();
+			togglePause();
 		}
 		if(e.repeat) return;
 		if(e.key==='ArrowLeft' || e.key==='a' || e.key==='A'){ moveCar(-1); }
@@ -197,10 +309,13 @@
 	// מגע פשוט - הקשת צד המסך תזיז צעד יחיד
 	window.addEventListener('touchstart', e=>{ e.preventDefault(); const t = e.touches[0]; if(t.clientX < innerWidth/2) moveCar(-1); else moveCar(1); }, {passive:false});
 
+	levelFolderToggle.addEventListener('click', ()=>{ toggleFolder(); });
+	timeRange.addEventListener('input', ()=>{ customBaseTime = Number(timeRange.value); updateSettingsUI(); saveSettings(); });
+	obstacleToggle.addEventListener('change', ()=>{ obstaclesEnabled = obstacleToggle.checked; saveSettings(); });
+	restartButton.addEventListener('click', ()=>{ crashed = false; finished = false; startTime = null; targetX = 0; buildLevel(); running = true; restartButton.classList.remove('show'); msgEl.textContent = 'המשחק התחיל מחדש!'; msgEl.style.background='rgba(0,0,0,0.35)'; });
 	function moveCar(dir){
 		if(!started || finished || crashed) return;
-		car.position.x += dir * moveStep;
-		car.position.x = Math.max(-maxSteer, Math.min(maxSteer, car.position.x));
+		targetX = Math.max(-maxSteer, Math.min(maxSteer, targetX + dir * moveStep));
 		tiltTarget = -dir * 0.35; // הטיה קצרה למראה
 	}
 
@@ -215,6 +330,8 @@
 				const forward = speed * dt;
 				car.position.z -= forward;
 			}
+			// תנועה חלקה לצדדים
+			car.position.x += (targetX - car.position.x) * 0.18;
 			// סטייר: הטיה חלקה
 			car.rotation.z += (tiltTarget - car.rotation.z) * 0.12;
 			// החזיר את הטיה בהדרגה
@@ -234,7 +351,7 @@
 					msgEl.textContent = 'התנגשת במכשול! נו, הפסדת 😵';
 					msgEl.style.background='rgba(120,0,0,0.45)';
 					startButton.textContent = 'התחל מחדש';
-					startButton.style.display = 'block';
+					restartButton.classList.add('show');
 					break;
 				}
 			}
@@ -242,17 +359,24 @@
 				finished = true;
 				running = false;
 				levelComplete = true;
-				msgEl.textContent = 'רמה ' + level + ' עברה! לחץ להמשך לרמה ' + (level + 1);
+				const finishTime = (now - startTime)/1000;
+				if(!getBestTime(level) || finishTime < getBestTime(level)){
+					saveBestTime(level, finishTime);
+				}
+				addLeaderboardEntry(level, finishTime);
+				selectedLevel = Math.min(level + 1, maxLevels);
+				updateLevelSelection();
+				msgEl.textContent = 'רמה ' + level + ' עברה! לחץ כדי לבחור רמה או להמשיך.';
 				msgEl.style.background='rgba(0,120,0,0.45)';
-				startButton.textContent = 'המשך לרמה ' + (level + 1);
-				startButton.style.display = 'block';
+				startButton.textContent = 'המשך לרמה ' + selectedLevel;
+				openMenu('השלמת רמה ' + level + '! בחר רמה אחרת או המשך.');
 			}
-			if(Math.abs(car.position.x) > roadHalf){ crashed = true; running = false; msgEl.textContent = 'התנגש! ירדת מהכביש 😵'; msgEl.style.background='rgba(120,0,0,0.45)'; startButton.textContent = 'התחל מחדש'; startButton.style.display = 'block'; }
+			if(Math.abs(car.position.x) > roadHalf){ crashed = true; running = false; selectedLevel = level; updateLevelSelection(); msgEl.textContent = 'התנגש! ירדת מהכביש 😵'; msgEl.style.background='rgba(120,0,0,0.45)'; startButton.textContent = 'התחל מחדש'; restartButton.classList.add('show'); openMenu('התנגש! בחר רמה או נסה שוב.'); }
 			// בדיקת זמן
 			const elapsed = (now - startTime)/1000;
 			const left = Math.max(0, timeLimit - elapsed);
 			timerEl.textContent = left.toFixed(2);
-			if(left <= 0 && !finished){ crashed = true; running = false; msgEl.textContent = 'הזמן נגמר — הפסדת ⏱️'; msgEl.style.background='rgba(120,0,0,0.45)'; startButton.textContent = 'התחל מחדש'; startButton.style.display = 'block'; }
+			if(left <= 0 && !finished){ crashed = true; running = false; selectedLevel = level; updateLevelSelection(); msgEl.textContent = 'הזמן נגמר — הפסדת ⏱️'; msgEl.style.background='rgba(120,0,0,0.45)'; startButton.textContent = 'התחל מחדש'; restartButton.classList.add('show'); openMenu('הזמן נגמר. בחר רמה או נסה שוב.'); }
 		}
 
 		// אפקט מהירות — מעט טשטוש וגמישות
@@ -269,8 +393,13 @@
 		running = false;
 		finished = false;
 		crashed = false;
+		levelComplete = false;
+		paused = false;
+		pauseStart = null;
 		startTime = null;
 		forwardPressed = false;
+		targetX = 0;
+		restartButton.classList.remove('show');
 		car.position.set(0,0, roadLength/2 - 8);
 		car.rotation.set(0,0,0);
 		camera.position.set(0,5,12);
@@ -278,16 +407,23 @@
 		timerEl.textContent = timeLimit.toFixed(2);
 		msgEl.textContent = 'לחץ על התחל כדי להתחיל את המשחק';
 		msgEl.style.background='rgba(0,0,0,0.35)';
-		startButton.style.display = 'block';
+		openMenu('ברוכים הבאים! בחר רמה מתוך התיקייה והתחל.');
 	}
 
 	startButton.addEventListener('click', ()=>{
+		if(menuOverlay.style.display !== 'none'){
+			restartToSelectedLevel();
+			return;
+		}
 		if(levelComplete){
 			level += 1;
+			selectedLevel = level;
+			updateLevelSelection();
 			levelComplete = false;
 			buildLevel();
 			running = true;
-			startButton.style.display = 'none';
+			restartButton.classList.remove('show');
+			closeMenu();
 			msgEl.textContent = 'רמה ' + level + ' התחילה! הולך להיות קשה יותר.';
 			msgEl.style.background='rgba(0,0,0,0.35)';
 			return;
@@ -298,21 +434,20 @@
 			startTime = null;
 			buildLevel();
 			running = true;
-			startButton.style.display = 'none';
+			restartButton.classList.remove('show');
+			closeMenu();
+			resetCarAndCamera();
 			msgEl.textContent = 'המשחק התחיל מחדש! נווט טוב יותר הפעם.';
 			msgEl.style.background='rgba(0,0,0,0.35)';
 			return;
 		}
 		if(started) return;
-		started = true;
-		running = true;
-		startTime = null;
-		buildLevel();
-		startButton.style.display = 'none';
-		msgEl.textContent = 'המשחק התחיל! נווט ונסה להגיע בזמן.';
-		msgEl.style.background='rgba(0,0,0,0.35)';
+		restartToSelectedLevel();
 	});
 
+	loadSettings();
+	initMenu();
+	renderLeaderboard();
 	resetGame();
 
 	// כפתור לטעינה מחדש וניפוי באגים
